@@ -1,8 +1,9 @@
 import argparse
+import hashlib
 import  logging
 import math
 from datetime import datetime
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Any
 from pathlib import Path
 # 获取文件的MIME类型
 import mimetypes
@@ -22,8 +23,10 @@ def cli_input_arg():
     arg_parse.add_argument("--statistics","-S",type=str,help="是否对当前文件夹下的文件进行统计type/date/mime",default="None")
     # 是否跟随符号链接（可选参数）
     arg_parse.add_argument("--follow","-fl",action="store_true",default=False,help="是否跟随符号链接,会去找.lnk的实际地址")
+    # 是否要找疑似相同的文件
+    arg_parse.add_argument("--repeat","-r",action="store_true",default=False,help="是否要找到疑似相同的文件")
     # 输出报告的文件路径（JSON 或 CSV）
-    arg_parse.add_argument("--report_path","-r",type=str,help="将扫描的结果生成报告保存到你指定的位置")
+    arg_parse.add_argument("--report_path","-rp",type=str,help="将扫描的结果生成报告保存到你指定的位置")
     # 指定使用对应的查重算法（这里用 -h 会与argparse内部的 -h参数冲突，所以使用-ha）
     arg_parse.add_argument("--hash_algorithm","-ha",type=str,help="你指定选择对文件查重使用什么算法,默认SHA-256",default="SHA-256")
     # 小于多少字节(B)可以跳过hash
@@ -244,7 +247,6 @@ def statistics_file_size(file_dict:dict[str,float],queue:deque[Path],way:str):
     pass
 
 
-
 # 格式化统计结果
 def format_statistics_result(root_path:str,way:Optional[str]):
     if(way == "None"): return
@@ -274,6 +276,88 @@ def format_statistics_result(root_path:str,way:Optional[str]):
     pass
 
 
+def hash_file(file_path:Path,chunk_size=1024*1024):
+    # 使用sha256进行hash计算
+    h = hashlib.sha256()
+    with file_path.open('rb') as f:
+        while chunk := f.read(chunk_size):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+# 找到疑似相同的文件
+def find_distinct_file(root_path:str,same_find:bool=False):
+    """
+    :param root_path: 根路径
+    :param same_find: 是否进行相同文件发现
+    :return:
+    """
+    if not same_find: return
+
+    # 使用字典记录
+    assume_dict:dict[str,List[Path]] = {}
+
+    size_temp:dict[float,List] = {}
+
+    queue = deque([Path(root_path)])
+
+    while queue:
+        # 出队
+        root = queue.popleft()
+        # 如果是文件，我们就进行比对
+        if root.is_file():
+            # 1.比对文件大小(大小不同，肯定不同)
+            size = root.stat().st_size
+            # 4.按文件大小分组
+            if size not in size_temp.keys():
+                size_temp[size] = []
+                size_temp[size].append(root.resolve())
+            else:
+                size_temp[size].append(root.resolve())
+            pass
+        # 如果是文件夹就扫描它
+        elif root.is_dir():
+            for item in root.iterdir():
+                # 如果扫描到文件或文件夹就入队
+                if item.is_file() or item.is_dir():
+                    # 如果是链接文件就不入队
+                    if item.is_symlink():
+                        continue
+                    else:
+                        queue.append(item)
+
+    # 经过第一轮的查询，我们筛选出了第一波疑似相同的文件
+    # 排除大小列表的长度为1的，为1就表示不可能存在重复文件
+    del_key = []
+    for key,val in size_temp.items():
+        if len(val) == 1:
+           del_key.append(key)
+
+    for key in del_key:
+       del size_temp[key]
+
+
+    # 计算hash
+    for key,items in size_temp.items():
+        for item in items:
+           hash_key =  hash_file(item)
+           if hash_key not in assume_dict:
+               assume_dict[hash_key] = []
+           assume_dict[hash_key].append(item)
+
+
+    # 疑似相同文件
+    print(f"{'-'*20}以下文件疑似相同{'-'*20}")
+    for key,items in assume_dict.items():
+        print(f"{key}：")
+        for item in items:
+            print(f"{item.resolve().__str__()}")
+    pass
+
+
+
+
+
 if __name__ == '__main__':
     arg_parse = cli_input_arg()
     args = arg_parse.parse_args()
@@ -283,6 +367,8 @@ if __name__ == '__main__':
     traverse_content(args.root_path,args.recursive,args.follow)
     # 2.统计文件夹的文件大小
     format_statistics_result(args.root_path,args.statistics)
+    # 3.找疑似相同的文件
+    find_distinct_file(args.root_path,args.repeat)
 
 
 
