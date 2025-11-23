@@ -10,20 +10,6 @@ import mimetypes
 from collections import deque
 
 
-class FileInfo:
-    def __init__(self,path,name,type,size,update_time,depth):
-        self.path = path
-        self.name = name
-        self.type = type
-        self.size = size
-        self.update_time = update_time
-        self.depth = depth
-
-    def __str__(self):
-        return f"name: {self.name}, path: {self.path}, type：{self.type}, size：{self.size}B, update_time：{self.update_time}, depth：{self.depth} "
-
-    def __repr__(self):
-        return self.__str__()
 
 
 def cli_input_arg():
@@ -51,6 +37,22 @@ def cli_input_arg():
     pass
 
 
+class FileInfo:
+    def __init__(self,path,name,type,size,update_time,depth):
+        self.path = path
+        self.name = name
+        self.type = type
+        self.size = size
+        self.update_time = update_time
+        self.depth = depth
+
+    def __str__(self):
+        return f"name: {self.name}, path: {self.path}, type：{self.type}, size：{self.size}B, update_time：{self.update_time}, depth：{self.depth} "
+
+    def __repr__(self):
+        return self.__str__()
+
+
 # 格式化非递归遍历文件夹
 def format_non_recursion_output(file_content:List[FileInfo]):
     """
@@ -63,6 +65,7 @@ def format_non_recursion_output(file_content:List[FileInfo]):
     pass
 
 
+
 def format_recursion_output(stack: deque[Tuple[Path, int]], is_follow=False):
     """
     格式化输出递归方式的文件夹访问（深度优先遍历）
@@ -70,11 +73,18 @@ def format_recursion_output(stack: deque[Tuple[Path, int]], is_follow=False):
     :param is_follow: 是否跟随符号链接
     :return:
     """
+    # 访问列表（判断是否已经访问过对应的路径）
+    visit_list = set()
     while stack:
         # 从栈顶弹出（深度优先）
         root_path, depth = stack.pop()
-
+        # 判断是否已经访问过改路径了
+        resolve_path =  root_path.resolve()
+        if resolve_path.__str__() in visit_list:
+            # 访问过就直接进行下一次循环
+            continue
         try:
+
             # 先打印当前目录信息
             modify_time = root_path.stat().st_mtime
             size = root_path.stat().st_size
@@ -83,7 +93,9 @@ def format_recursion_output(stack: deque[Tuple[Path, int]], is_follow=False):
             file_type = 'dir'
             name = root_path.name
 
-            print(f"{'-' * (depth * 2)} {name}\t {file_type}\t {size}B\t {format_time}\t")
+            # 将对应的绝对路径加入到访问列表
+            visit_list.add(resolve_path.__str__())
+            print(f"{' '*(depth*2)}/{name:<20}{file_type:<10}{size:>8}B{format_time}{resolve_path.__str__()}")
 
             # 收集子目录，稍后压入栈中（保证正确的遍历顺序）
             subdirs = []
@@ -96,30 +108,50 @@ def format_recursion_output(stack: deque[Tuple[Path, int]], is_follow=False):
                 format_time = time_stamp.strftime("%Y-%m-%d %H:%M:%S")
                 name = item.name
 
+                resolve_path = item.resolve()
+
                 if item.is_file():
                     # 处理文件
                     file_type, encoding = mimetypes.guess_type(name)
                     if file_type is None:
                         file_type = item.suffix[1:] if item.suffix else 'unknown'
 
-
-                    print(f"{'-' * ((depth + 1) * 2)} {name}\t {file_type}\t {size}B\t {format_time}\t")
-
+                    print(f"{'-'*(depth * 2)}{name:<20}{file_type:<10}{size:>8}B{format_time}{resolve_path.__str__()}")
                 elif item.is_symlink():
+                    file_type = 'symlink'
+                    # 解析这个符号连接的真是指向
+                    real_path =  resolve_path.__str__()
                     # 处理符号链接
-                    file_type = 'lnk'
-                    print(f"{'-' * ((depth + 1) * 2)} {name}\t {file_type}\t {size}B\t {format_time}\t")
-
+                    print(f"{'-' * (depth * 2)}{name:<20}{file_type:<10}{size:>8}B{format_time}{real_path}")
+                elif item.is_symlink() and is_follow:
+                    # 如果访问的是符号连接，并且对它选择允许跟随
+                    # 1.判断它的真实路径是文件/文件夹
+                    real_path = item.resolve()
+                    if real_path.is_file():
+                        print(f"{'-' * (depth * 2)}{name:<20}{file_type:<10}{size:>8}B{format_time}{real_path}")
+                    elif real_path.is_dir() or real_path.is_symlink():
+                        subdirs.append(real_path)
+                    pass
+                # 可能产生嵌套访问的根本在于文件夹，所以我们只要对文件夹进行判断即可
                 elif item.is_dir():
                     # 收集子目录，后续统一处理
                     subdirs.append(item)
 
+
             # 将子目录按逆序压入栈中（保证正确的遍历顺序）
             for subdir in reversed(subdirs):
-                stack.append((subdir, depth + 1))
+                # 如果已经访问过改文件，就直接跳过
+                if subdir.resolve().__str__() in visit_list:
+                    continue
+                else:
+                    # 将对应的绝对路径加入到访问列表中
+                    stack.append((subdir, depth + 1))
+
+            # 最后清空这个访问列表
 
         except Exception as e:
             print(f"scan root path find Error:{e}")
+    visit_list.clear()
     pass
 
 
@@ -148,17 +180,18 @@ def traverse_content(path_str:str,is_recursive:bool=False,is_follow:bool=False):
     file_structs = []
     if(is_recursive):
         # 遍历式递归
-        # 修改为广度优先遍历实现栈
+        # 深度优先遍历实现栈
+
         queue = deque([(current_path,0)])
         format_recursion_output(queue,is_follow=is_follow)
         pass
     else:
-        # 非递归遍历
         for item in current_path.iterdir():
                 # 1.生成FileInfo对象
                 file_type = 'dir'
                 size = item.stat().st_size
-                modify_time = datetime.fromtimestamp(current_path.stat().st_mtime)
+                # 这里要改为item而不是current_path
+                modify_time = datetime.fromtimestamp(item.stat().st_mtime)
                 formatted_time = modify_time.strftime("%Y-%m-%d %H:%M:%S")
                 if item.is_file():
                     # 先猜它的MIME 类型
@@ -174,7 +207,6 @@ def traverse_content(path_str:str,is_recursive:bool=False,is_follow:bool=False):
                 file_structs.append(file_info)
         format_non_recursion_output(file_structs)
         pass
-        # 3.2.显示当前文件夹的第一层的文件
 
     pass
 
@@ -224,7 +256,7 @@ if __name__ == '__main__':
 
     print(args)
     # 1.遍历对应文件夹
-    traverse_content(args.root_path,args.recursive,False)
+    traverse_content(args.root_path,args.recursive,args.follow)
 
 
 
