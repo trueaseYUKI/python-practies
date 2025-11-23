@@ -95,7 +95,7 @@ def format_recursion_output(stack: deque[Tuple[Path, int]], is_follow=False):
 
             # 将对应的绝对路径加入到访问列表
             visit_list.add(resolve_path.__str__())
-            print(f"{' '*(depth*2)}/{name:<20}{file_type:<10}{size:>8}B{format_time}{resolve_path.__str__()}")
+            print(f"{' '*(depth*2)}/{name:<20} {file_type:<10} {size:>8}B {format_time} {resolve_path.__str__()}")
 
             # 收集子目录，稍后压入栈中（保证正确的遍历顺序）
             subdirs = []
@@ -116,19 +116,15 @@ def format_recursion_output(stack: deque[Tuple[Path, int]], is_follow=False):
                     if file_type is None:
                         file_type = item.suffix[1:] if item.suffix else 'unknown'
 
-                    print(f"{'-'*(depth * 2)}{name:<20}{file_type:<10}{size:>8}B{format_time}{resolve_path.__str__()}")
-                elif item.is_symlink():
-                    file_type = 'symlink'
-                    # 解析这个符号连接的真是指向
-                    real_path =  resolve_path.__str__()
-                    # 处理符号链接
-                    print(f"{'-' * (depth * 2)}{name:<20}{file_type:<10}{size:>8}B{format_time}{real_path}")
+                    print(f"{'-'*(depth * 2)}{name:<20} {file_type:<10} {size:>8}B{ format_time} {resolve_path.__str__()}")
                 elif item.is_symlink() and is_follow:
                     # 如果访问的是符号连接，并且对它选择允许跟随
                     # 1.判断它的真实路径是文件/文件夹
                     real_path = item.resolve()
+                    # 处理符号链接
+                    print(f"{'-' * (depth * 2)}{name:<20} {file_type:<10} {size:>8}B {format_time} {real_path.__str__()}")
                     if real_path.is_file():
-                        print(f"{'-' * (depth * 2)}{name:<20}{file_type:<10}{size:>8}B{format_time}{real_path}")
+                        print(f"{'-' * (depth * 2)}{name:<20} {file_type:<10} {size:>8}B {format_time} {real_path}")
                     elif real_path.is_dir() or real_path.is_symlink():
                         subdirs.append(real_path)
                     pass
@@ -212,41 +208,69 @@ def traverse_content(path_str:str,is_recursive:bool=False,is_follow:bool=False):
 
 
 
+def sum_size(file_dict:dict,way:str,file:Path):
+    key = None
+    if way == "type":
+        key = file.suffix[1:]
+    elif way == "date":
+        modify_time = datetime.fromtimestamp(file.stat().st_mtime)
+        modify_date = modify_time.strftime("%Y-%m-%d")
+        key = modify_date
+    size = file.stat().st_size
+    if key != None and key not in file_dict:
+        file_dict[key] = size
+    else:
+        file_dict[key] += size
 
 # statistics 模块
-def statistics_file_size(item:FileInfo,non_statistics:bool=True,way="type"):
-    """
-    文件大小统计方法
-    :param path: 根路径
-    :param non_statistics: 不进行统计
-    :param way: 统计方式
-    :return:
-    """
-    # 1.先判断是否需要统计
-
+def statistics_file_size(file_dict:dict[str,float],queue:deque[Path],way:str):
+   # 1.先判断根据什么统计（利用广度优先遍历BFS）
+    while queue:
+        # 出队
+        root = queue.popleft()
+        if root.is_file():
+            sum_size(file_dict,way,root)
+        # 如果是文件夹就扫描它
+        elif root.is_dir():
+            for item in root.iterdir():
+                # 如果扫描到文件或文件夹就入队
+                if item.is_file() or item.is_dir():
+                    # 如果是链接文件就不入队
+                    if item.is_symlink():
+                        continue
+                    else:
+                        queue.append(item)
 
     pass
+
+
 
 # 格式化统计结果
 def format_statistics_result(root_path:str,way:Optional[str]):
     if(way == "None"): return
 
+
     file_dict = {}
-    # 1.获取根路径
     root = Path(root_path)
-    # 2.调用统计方法
-    stack = deque([(root,0)])
+    queue = deque([root])
+    statistics_file_size(file_dict, queue, way)
+
+    # 标题
     match way:
         case "type":
-            print("按后缀名统计：")
-        case "time":
-            print("按修改时间统计：")
+            print(f"{'文件类型':<15} {'总大小':>10}")
+        case "date":
+            print(f"{'修改日期':<15} {'总大小':>10}")
         case "mime":
-            print("按mime类型统计：")
+            print(f"{'MIME类型':<20} {'总大小':>10}")
 
-    for key,val in file_dict.items():
-        size = math.ceil(val / 1024)
-        print(f"{key}：{size}KB")
+    print("-" * 30)
+
+    for key, val in file_dict.items():
+        # 将字节转换为KB，四舍五入
+        size_kb = math.ceil(val / 1024)
+        print(f"{key:<20} {size_kb:>10} KB")
+
     pass
 
 
@@ -257,6 +281,8 @@ if __name__ == '__main__':
     print(args)
     # 1.遍历对应文件夹
     traverse_content(args.root_path,args.recursive,args.follow)
+    # 2.统计文件夹的文件大小
+    format_statistics_result(args.root_path,args.statistics)
 
 
 
