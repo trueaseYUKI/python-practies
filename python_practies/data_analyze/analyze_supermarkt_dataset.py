@@ -2,7 +2,8 @@ from typing import Optional
 
 import pandas as pd
 from pathlib import Path
-
+# 图表
+import matplotlib.pyplot as plt
 from pandas import DataFrame
 
 
@@ -142,44 +143,110 @@ def primary_analyzed_data(df:DataFrame):
     """
     if df is None: return
 
-    print(f'\n{df.head()}')
+    # print(f'\n{df.head()}')
     # 了解数据的规模
-    print(f"\n数据的列和行数量：{df.shape}")  # (行数, 列数)
-    print(f"\n数值型的数据统计：\n{df.describe()}")
-    print(f"\n片段唯一值的确认：\n{df['Segment'].nunique()}")
-    print(f"\n查看一共有多少种类的产品：\n{df['Category'].unique()}")
+    # print(f"\n数据的列和行数量：{df.shape}")  # (行数, 列数)
+    # print(f"\n数值型的数据统计：\n{df.describe()}")
+    # print(f"\n片段唯一值的确认：\n{df['Segment'].nunique()}")
+    # print(f"\n查看一共有多少种类的产品：\n{df['Category'].unique()}")
 
     # 数据完整性检查
-    print(f"\n数据是否任然有空：\n{df.isna().sum()}")
-    print(f"\n数据是否任然有重复：\n{df.duplicated().sum()}")
-    print(f"\n数据销售值是否异常：\n{df[df['Sales'] < 0]}")
+    # print(f"\n数据是否任然有空：\n{df.isna().sum()}")
+    # print(f"\n数据是否任然有重复：\n{df.duplicated().sum()}")
+    # print(f"\n数据销售值是否异常：\n{df[df['Sales'] < 0]}")
 
 
     # 按产品分类进行统计
     category_summary = df.groupby(['Category','Sub-Category'])[['Sales','Profit']].sum()
-    print(f"\n按产品分类进行销售额、利润统计：\n{category_summary}")
+    # print(f"\n按产品分类进行销售额、利润统计：\n{category_summary}")
 
     # 按地区和客户类型分类统计
     region_segment_summary = df.groupby(['Region','Segment'])['Sales'].sum()
-    print(f"\n按地区分类进行销售额、利润统计：\n{region_segment_summary}")
+   # print(f"\n按地区分类进行销售额、利润统计：\n{region_segment_summary}")
 
     # 计算每个月份/季度销量的总销售额
     # dt:datetime，访问Series的datetime属性和方法
     # to_period：将datetime转换为月份周期，“M”表示按月分组
     monthly_sales = df.groupby(df['Order Date'].dt.to_period('M'))['Sales'].sum()
-    print(f"\n统计月份/季度销量的总销售额：\n{monthly_sales}")
+   #  print(f"\n统计月份/季度销量的总销售额：\n{monthly_sales}")
 
     # 运输的天数计算
     # 将我们计算的运输天数放到DataFrame中
     df['Shipping Days'] = (df['Ship Date'] - df['Order Date']).dt.days
-    print(f"\n查看每个货物的运输天数：\n{df['Shipping Days'].describe()}")
+    # print(f"\n查看每个货物的运输天数：\n{df['Shipping Days'].describe()}")
 
-    # 分析利润最高的产品
+    # 按产品汇总销售额和利润
     product_summary = df.groupby('Product Name')[['Sales','Profit']].sum()
     # by：根据Sales排序，排序方式：降序，取前十个数据
     top_products = product_summary.sort_values(by="Sales",ascending=False).head(10)
-    print(f"\n最畅销的10个产品：\n{top_products}")
+    # print(f"\n按产品汇总销售额和利润：\n{top_products}")
 
+    # 利润率最高的产品
+    df['Profit Rate'] = df['Profit'] / df['Sales']
+    top_profit_products = df.sort_values(by='Profit Rate', ascending=False).head(10)
+    # print(f"\n利润率最高的十件商品：\n{top_profit_products}")
+
+    pass
+
+def draw_illustrate(df:DataFrame):
+    """
+    返回图示
+    :return:
+    """
+
+    # 分析销量高的商品的利润情况
+    product_summary = df.groupby('Product Name')[['Sales','Profit']].sum()
+    top_products = product_summary.sort_values(by="Sales", ascending=False).head(10)
+    print(top_products)
+
+    plt.figure(figsize=(12, 6))
+    plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'DejaVu Sans']
+    plt.rcParams['axes.unicode_minus'] = False  # 解决负号 '-' 显示为方块的问题
+
+    # 分析销量高的商品的利润情况
+    product_summary = df.groupby('Product Name')[['Sales', 'Profit']].sum()
+    top_products = product_summary.sort_values(by="Sales", ascending=False).head(10)
+    print(top_products)
+
+    plt.figure(figsize=(12, 6))
+    plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'DejaVu Sans']
+    plt.rcParams['axes.unicode_minus'] = False  # 解决负号 '-' 显示为方块的问题
+
+    # 分析销量高的商品的利润情况
+    product_summary = df.groupby('Product Name')[['Sales', 'Profit']].sum()
+    top_products = product_summary.sort_values(by="Sales", ascending=False).head(10)
+    print(top_products)
+
+    plt.figure(figsize=(12, 6))
+    plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'DejaVu Sans']
+    plt.rcParams['axes.unicode_minus'] = False  # 解决负号 '-' 显示为方块的问题
+
+    # 分析销量高的商品的利润情况
+    product_summary = df.groupby('Product Name')[['Sales', 'Profit']].sum()
+    top_products = product_summary.sort_values(by="Sales", ascending=False).head(10)
+    print(top_products)
+
+    plt.figure(figsize=(12, 6))
+    plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'DejaVu Sans']
+    plt.rcParams['axes.unicode_minus'] = False  # 解决负号 '-' 显示为方块的问题
+
+    x = range(len(top_products))  # x轴位置：创建一个范围对象，表示x轴的位置索引(0到9)，对应10个产品
+    width = 0.35  # 柱状图宽度：设置每个柱子的宽度为0.35，用于创建并排柱状图
+
+    # 绘制销售额柱状图：将x轴位置左移width/2，使两个柱子并排显示，设置标签为"销售额"
+    plt.bar([i - width / 2 for i in x], top_products['Sales'], width, label='销售额')
+    # 绘制利润柱状图：将x轴位置右移width/2，使两个柱子并排显示，设置标签为"利润"
+    plt.bar([i + width / 2 for i in x], top_products['Profit'], width, label='利润')
+
+    plt.title("销量前十商品的销售与利润情况")  # 设置图表标题
+    plt.xlabel("产品名称")  # 设置x轴标签
+    plt.ylabel("金额")  # 设置y轴标签
+
+    # 设置x轴刻度标签：使用产品名称作为标签，旋转45度便于阅读，ha='right'使标签右对齐
+    plt.xticks(x, top_products.index, rotation=45, ha='right')
+    plt.legend()  # 显示图例，展示"销售额"和"利润"的标识
+    plt.tight_layout()  # 自动调整图表布局，防止标签被截断
+    plt.show()  # 显示图表
 
     pass
 
@@ -189,3 +256,5 @@ date_frame = load_data()
 clean_date_frame = clean_dataset(date_frame)
 # 初步分析
 primary_analyzed_data(clean_date_frame)
+# 画图
+draw_illustrate(clean_date_frame)
