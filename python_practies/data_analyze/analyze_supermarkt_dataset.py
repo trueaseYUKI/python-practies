@@ -51,7 +51,7 @@ def clean_dataset(df:DataFrame) -> Optional[DataFrame]:
     #print("行结构如下：")
     #print(f"\n{df.head()}")
     # 1.先查看下一共有多少行
-    columns, rows= df.shape
+    columns,rows= df.shape
 
     print(f'\n列：{rows}，行：{columns}\n')
 
@@ -62,8 +62,11 @@ def clean_dataset(df:DataFrame) -> Optional[DataFrame]:
     # 3.修改Order Date和Ship Date的类型为datetime
     # 以下转换会对错误格式直接抛出异常
     # df['Order Date'] = df['Order Date'].astype('datetime64[ns]')
-    df['Order Date'] = pd.to_datetime(df['Order Date'],errors='coerce')
-    df['Ship Date'] = pd.to_datetime(df['Ship Date'],errors='coerce')
+    df["Order Date"] = pd.to_datetime(df["Order Date"],dayfirst=True,errors='coerce')
+    df["Ship Date"] = pd.to_datetime(df["Ship Date"],dayfirst=True,errors='coerce')
+    # 将下单的时间年和月单独分离出来
+    df['Year'] = df["Order Date"].dt.year
+    df['Month'] = df['Order Date'].values.astype('datetime64[M]')
 
 
 
@@ -122,6 +125,9 @@ def clean_dataset(df:DataFrame) -> Optional[DataFrame]:
             print("已调换异常日期")
 
 
+    print(f"\n{'='*30} 清洗之后的数据 {'='*30}\n")
+    print(f"{df.head()}\n")
+
     return df
 
 
@@ -156,6 +162,23 @@ def primary_analyzed_data(df:DataFrame):
     # 按地区和客户类型分类统计
     region_segment_summary = df.groupby(['Region','Segment'])['Sales'].sum()
     print(f"\n按地区分类进行销售额、利润统计：\n{region_segment_summary}")
+
+    # 计算每个月份/季度销量的总销售额
+    # dt:datetime，访问Series的datetime属性和方法
+    # to_period：将datetime转换为月份周期，“M”表示按月分组
+    monthly_sales = df.groupby(df['Order Date'].dt.to_period('M'))['Sales'].sum()
+    print(f"\n统计月份/季度销量的总销售额：\n{monthly_sales}")
+
+    # 运输的天数计算
+    # 将我们计算的运输天数放到DataFrame中
+    df['Shipping Days'] = (df['Ship Date'] - df['Order Date']).dt.days
+    print(f"\n查看每个货物的运输天数：\n{df['Shipping Days'].describe()}")
+
+    # 分析利润最高的产品
+    product_summary = df.groupby('Product Name')[['Sales','Profit']].sum()
+    # by：根据Sales排序，排序方式：降序，取前十个数据
+    top_products = product_summary.sort_values(by="Sales",ascending=False).head(10)
+    print(f"\n最畅销的10个产品：\n{top_products}")
 
 
     pass
